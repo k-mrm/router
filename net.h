@@ -3,8 +3,7 @@
 
 #include <stdbool.h>
 
-typedef struct NETIF NETIF;
-typedef struct ARPTABLE ARPTABLE;
+typedef struct NETDEV NETDEV;
 
 struct NETDEV {
 	int soc;

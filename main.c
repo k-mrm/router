@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <poll.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -10,6 +11,8 @@
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
 #include <linux/if_packet.h>
+
+#include "net.h"
 
 static NETDEV *netdev[16];
 static int ndev;
@@ -41,7 +44,6 @@ static int
 router()
 {
 	struct pollfd fd[16];
-	int rc;
 
 	for (int i = 0; i < ndev; i++) {
 		struct pollfd *f = &fd[i];
@@ -69,6 +71,9 @@ main(int argc, char **argv)
 
 		netdev[ndev++] = dev;
 	}
+
+	if (ndev == 0)
+		return -1;
 
 	rc = router();
 

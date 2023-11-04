@@ -14,20 +14,12 @@
 
 #include "net.h"
 
-static void
-gethwaddr(NETDEV *dev)
-{
-	;
-}
-
 NETDEV *
 opennetdev(const char *name, bool promisc)
 {
 	struct ifreq ifr;
 	struct sockaddr_ll sa;
 	NETDEV *dev;
-	struct sock
-	int soc;
 
 	dev = malloc(sizeof *dev);
 	if (!dev)
@@ -48,7 +40,7 @@ opennetdev(const char *name, bool promisc)
 
 	sa.sll_family = PF_PACKET;
 	sa.sll_protocol = htons(ETH_P_ALL);
-	sa.sll_ifindex = ifr.ifr_index;
+	sa.sll_ifindex = ifr.ifr_ifindex;
 
 	if (bind(dev->soc, (struct sockaddr *)&sa, sizeof sa) < 0) {
 		goto err;
