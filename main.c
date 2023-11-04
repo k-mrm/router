@@ -19,6 +19,20 @@ static int ndev;
 static bool term = false;
 
 static int
+disableipforward()
+{
+	FILE *fp;
+
+	if (!(fp = fopen("/proc/sys/net/ipv4/ip_forward", "w")))
+		return -1;
+	fputs("0", fp);
+
+	fclose(fp);
+
+	return 0;
+}
+
+static int
 routercore(struct pollfd *fd)
 {
 	int nready;
@@ -26,8 +40,9 @@ routercore(struct pollfd *fd)
 	NETDEV *dev;
 
 	nready = poll(fd, ndev, -1);
-	if (nready < 0)
+	if (nready < 0) {
 		return -1;
+	}
 
 	for (int i = 0; i < ndev && nready; i++) {
 		if (fd[i].revents & (POLLIN | POLLERR)) {
@@ -66,14 +81,18 @@ main(int argc, char **argv)
 
 	for (int i = 1; i < argc; i++) {
 		dev = opennetdev(argv[i], 1);
-		if (!dev)
+		if (!dev) {
 			return -1;
+		}
 
 		netdev[ndev++] = dev;
 	}
 
-	if (ndev == 0)
+	if (ndev == 0) {
 		return -1;
+	}
+
+	disableipforward();
 
 	rc = router();
 

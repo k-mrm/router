@@ -19,6 +19,7 @@ opennetdev(const char *name, bool promisc)
 {
 	struct ifreq ifr;
 	struct sockaddr_ll sa;
+	struct sockaddr_in *sin;
 	NETDEV *dev;
 
 	dev = malloc(sizeof *dev);
@@ -46,12 +47,17 @@ opennetdev(const char *name, bool promisc)
 		goto err;
 	}
 
-	if (promisc) {
-		if (ioctl(dev->soc, SIOCGIFFLAGS, &ifr) < 0) {
-			perror("SIOCGIFFLAGS");
-			goto err;
-		}
+	if (ioctl(dev->soc, SIOCGIFFLAGS, &ifr) < 0) {
+		perror("SIOCGIFFLAGS");
+		goto err;
+	}
 
+	if (!(ifr.ifr_flags & IFF_UP)) {
+		printf("%s is down\n", name);
+		goto err;
+	}
+
+	if (promisc) {
 		ifr.ifr_flags |= IFF_PROMISC;
 
 		if(ioctl(dev->soc, SIOCSIFFLAGS, &ifr) < 0) {
@@ -60,11 +66,37 @@ opennetdev(const char *name, bool promisc)
 		}
 	}
 
+	// get MAC address
 	if (ioctl(dev->soc, SIOCGIFHWADDR, &ifr) < 0) {
 		perror("SIOCGIFHWADDR");
 		goto err;
 	}
 	ethaddrcpy(dev->hwaddr, ifr.ifr_hwaddr.sa_data);
+
+	// get IP address
+	if (ioctl(dev->soc, SIOCGIFADDR, &ifr) < 0) {
+		perror("SIOCFIFADDR");
+		goto err;
+	}
+
+	if (ifr.ifr_addr.sa_family != PF_INET) {
+		perror("no IPv4");
+		goto err;
+	}
+
+	sin = (struct sockaddr_in *)&ifr.ifr_addr;
+	dev->ipv4.addr = ntohl(sin->sin_addr.s_addr);
+
+	// get netmask
+	if (ioctl(dev->soc, SIOCGIFNETMASK, &ifr) < 0) {
+		perror("SIOCGIFNETMASK");
+		goto err;
+	}
+
+	sin = (struct sockaddr_in *)&ifr.ifr_netmask;
+	dev->ipv4.netmask = ntohl(sin->sin_addr.s_addr);
+
+	dev->ipv4.subnet = dev->ipv4.addr & dev->ipv4.netmask;
 
 	return dev;
 
@@ -77,13 +109,73 @@ err:
 }
 
 ssize_t
-sendpacket(NETDEV *dev, unsigned char *buf, size_t nbuf)
+sendpacket(NETDEV *dev, SKBUF *buf)
 {
-	return write(dev->soc, buf, nbuf);
+	return write(dev->soc, buf->data, buf->size);
 }
 
 ssize_t
-recvpacket(NETDEV *dev, unsigned char *buf, size_t nbuf)
+recvpacket(NETDEV *dev, uchar *buf, size_t nbuf)
 {
 	return read(dev->soc, buf, nbuf);
+}
+
+SKBUF *
+skalloc(size_t size)
+{
+	SKBUF *skbuf;
+	void *buf;
+
+	skbuf = malloc(sizeof *skbuf);
+	if (!skbuf) {
+		return NULL;
+	}
+
+	buf = malloc(size + 64/* header room */);
+	if (!buf) {
+		return NULL;
+	}
+
+	memset(buf, 0, size + 64);
+
+	skbuf->head = buf;
+	skbuf->data = buf + 64;
+	skbuf->tail = buf + size + 64;
+	skbuf->size = size;
+
+	return skbuf;
+}
+
+void *
+skpush(SKBUF *buf, size_t size)
+{
+	void *data;
+
+	data = buf->data - size;
+	if (data < buf->head) {
+		return NULL;
+	}
+
+	buf->data = data;
+	buf->size += size;
+
+	return buf;
+}
+
+void
+skcopy(SKBUF *buf, uchar *src, size_t n)
+{
+	// TODO: boundary check
+	memcpy(buf->data, src, n);
+}
+
+void
+skfree(SKBUF *skbuf)
+{
+	void *buf;
+
+	buf = skbuf->head;
+
+	free(buf);
+	free(skbuf);
 }

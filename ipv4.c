@@ -9,6 +9,12 @@
 #include "net.h"
 
 int
+checksum()
+{
+	;
+}
+
+int
 recvipv4(NETDEV *dev, uint8_t *packet, size_t nbytes)
 {
 	return -1;

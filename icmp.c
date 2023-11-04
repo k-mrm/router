@@ -1,0 +1,12 @@
+
+int
+icmptimeexceeded()
+{
+	;
+}
+
+int
+icmpunreachable()
+{
+	;
+}

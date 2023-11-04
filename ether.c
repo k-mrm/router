@@ -12,12 +12,7 @@
 #include <linux/if_packet.h>
 
 #include "net.h"
-
-#define ETHER_TYPE_IPV4		0x0800
-#define ETHER_TYPE_ARP 		0x0806
-#define ETHER_TYPE_IPV6		0x86dd
-
-#define ETHER_HEADER_SIZE 	14
+#include "ether.h"
 
 int
 recvether(NETDEV *dev)
@@ -55,13 +50,27 @@ recvether(NETDEV *dev)
 }
 
 ssize_t
-sendether(NETDEV *dev, uint8_t *buf, size_t nbuf)
+sendether(NETDEV *dev, uchar *daddr, SKBUF *buf, ushort type)
 {
-	;
+	struct ether_header *eth;
+	uchar *saddr;
+
+	eth = skpush(buf, sizeof *eth);
+	if (!eth) {
+		return -1;
+	}
+
+	saddr = dev->hwaddr;
+
+	ethaddrcpy(eth->ether_dhost, daddr);
+	ethaddrcpy(eth->ether_shost, saddr);
+	eth->ether_type = htons(type);
+
+	sendpacket(dev, buf);
 }
 
 void
-ethaddrcpy(uint8_t *dst, uint8_t *src)
+ethaddrcpy(uchar *dst, uchar *src)
 {
 	memcpy(dst, src, ETHER_ADDR_LEN);
 }
