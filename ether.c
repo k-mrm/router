@@ -18,35 +18,52 @@ int
 recvether(NETDEV *dev)
 {
 	struct ether_header *eth;
-	unsigned short type;
-	uint8_t buf[4096];
-	uint8_t *packet;
+	ushort type;
+	uchar b[4096];
 	ssize_t nbytes;
+	SKBUF *buf;
+	int rc;
 
-	nbytes = recvpacket(dev, buf, 4096);
-	if (nbytes < 0)
+	nbytes = recvpacket(dev, b, 4096);
+	if (nbytes < 0) {
 		return -1;
+	}
 
-	eth = (struct ether_header *)buf;
+	buf = skalloc(nbytes);
+	if (!buf) {
+		return -1;
+	}
+	skcopy(buf, b, nbytes);
+
+	eth = skpulleth(buf);
+	if (!eth) {
+		rc = -1;
+		goto err;
+	}
+
 	type = ntohs(eth->ether_type);
-	packet = buf + ETHER_HEADER_SIZE;
-	nbytes -= ETHER_HEADER_SIZE;
 
 	switch (type) {
 	case ETHER_TYPE_IPV4:
-		return recvipv4(dev, packet, nbytes);
+		rc = recvipv4(dev, buf);
+		break;
 
 	case ETHER_TYPE_IPV6:
-		return -1;
-		// return recvipv6(dev, packet, nbytes);
+		goto err;
+		// return recvipv6(dev, buf);
 
 	case ETHER_TYPE_ARP:
-		return recvarp(dev, packet, nbytes);
+		rc = recvarp(dev, buf);
+		break;
 
 	default:
 		printf ("unknown ethernet type: %x\n", type);
-		return -1;
+		goto err;
 	}
+
+err:
+	skfree(buf);
+	return rc;
 }
 
 ssize_t
@@ -73,4 +90,10 @@ void
 ethaddrcpy(uchar *dst, uchar *src)
 {
 	memcpy(dst, src, ETHER_ADDR_LEN);
+}
+
+void
+ethzero(uchar *addr)
+{
+	memset(addr, 0, 6);
 }

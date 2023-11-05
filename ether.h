@@ -14,6 +14,8 @@
 
 int recvether(NETDEV *dev);
 ssize_t sendether(NETDEV *dev, uchar *daddr, SKBUF *buf, ushort type);
+
 void ethaddrcpy(uchar *dst, uchar *src);
+void ethzero(uchar *addr);
 
 #endif

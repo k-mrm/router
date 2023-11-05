@@ -13,6 +13,7 @@
 #include <linux/if_packet.h>
 
 #include "net.h"
+#include "ether.h"
 
 NETDEV *
 opennetdev(const char *name, bool promisc)
@@ -71,7 +72,7 @@ opennetdev(const char *name, bool promisc)
 		perror("SIOCGIFHWADDR");
 		goto err;
 	}
-	ethaddrcpy(dev->hwaddr, ifr.ifr_hwaddr.sa_data);
+	ethaddrcpy(dev->hwaddr, (uchar *)ifr.ifr_hwaddr.sa_data);
 
 	// get IP address
 	if (ioctl(dev->soc, SIOCGIFADDR, &ifr) < 0) {
@@ -162,6 +163,48 @@ skpush(SKBUF *buf, size_t size)
 	return buf;
 }
 
+void *
+skpull(SKBUF *buf, size_t size)
+{
+	void *data, *old;
+
+	old = buf->data;
+
+	data = buf->data + size;
+	if (data >= buf->tail) {
+		return NULL;
+	}
+
+	buf->data = data;
+	buf->size -= size;
+
+	return old;
+}
+
+void *
+skpulleth(SKBUF *buf)
+{
+	buf->eth = skpull(buf, sizeof(struct ether_header));
+
+	return buf->eth;
+}
+
+void *
+skpullip(SKBUF *buf)
+{
+	struct iphdr *ip;
+	ushort iphdrsz;
+
+	ip = buf->data;
+
+	iphdrsz = ip->ihl << 2;
+
+	buf->iphdr = skpull(buf, iphdrsz);
+	buf->iphdrsz = iphdrsz;
+
+	return buf->iphdr;
+}
+
 void
 skcopy(SKBUF *buf, uchar *src, size_t n)
 {
@@ -178,4 +221,33 @@ skfree(SKBUF *skbuf)
 
 	free(buf);
 	free(skbuf);
+}
+
+ushort
+checksum(uchar *buf, size_t n)
+{
+	uint sum = 0;
+	ushort *ptr = (ushort *)buf;
+	size_t i;
+
+	for (i = n; i > 1; i -= 2) {
+		sum += *ptr;
+		if (sum & 0x80000000) {
+			sum = (sum & 0xffff) + (sum >> 16);
+		}
+
+		ptr++;
+	}
+
+	if (i == 1) {
+		ushort a = 0;
+		*(uchar *)&a = *(uchar *)ptr;
+		sum += a;
+	}
+
+	while (sum >> 16) {
+		sum = (sum & 0xffff) + (sum >> 16);
+	}
+	
+	return ~sum;
 }

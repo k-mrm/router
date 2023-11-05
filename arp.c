@@ -20,7 +20,7 @@
 static ARPCACHE *arptable[131];
 
 static void
-arpupdatetime(ARPCACHE *cache)
+arptimestamp(ARPCACHE *cache)
 {
 	;
 }
@@ -39,15 +39,15 @@ addarptable(NETDEV *dev, uchar *hwaddr, IP ipaddr)
 	ethaddrcpy(cache->hwaddr, hwaddr);
 	cache->ipaddr = ipaddr;
 	cache->dev = dev;
-	arpupdatetime(cache);
+	arptimestamp(cache);
 
 	entry = arptable[ipaddr % 131];
 	cache->next = entry;
 	arptable[ipaddr % 131] = cache;
 }
 
-static ARPCACHE *
-searcharptable(uint32_t ipaddr)
+ARPCACHE *
+searcharptable(IP ipaddr)
 {
 	ARPCACHE *entry;
 
@@ -55,6 +55,7 @@ searcharptable(uint32_t ipaddr)
 
 	for (ARPCACHE *c = entry; c; c = c->next) {
 		if (c->ipaddr == ipaddr) {
+			arptimestamp(c);
 			return c;
 		}
 	}
@@ -100,9 +101,33 @@ dumparptable()
 }
 
 int
-sendarpreq()
+sendarpreq(NETDEV *dev, IP tip)
 {
-	;
+	ARP arphdr;
+	SKBUF *buf;
+	uchar *sha = dev->hwaddr;
+	uchar bcast[8] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+	IP sip = dev->ipv4.addr;
+
+	buf = skalloc(sizeof(ARP));
+	if (!buf) {
+		return -1;
+	}
+
+	arphdr.hrd = htons(ARPHRD_ETHER);
+	arphdr.pro = htons(ETHER_TYPE_IPV4);
+	arphdr.hln = ETH_ALEN;
+	arphdr.pln = 4;
+	arphdr.op = htons(ARPOP_REQUEST);
+
+	ethaddrcpy(arphdr.sha, sha);
+	arphdr.sip = htonl(sip);
+	ethzero(arphdr.tha);
+	arphdr.tip = htonl(tip);
+
+	skcopy(buf, &arphdr, sizeof(ARP));
+
+	return sendether(dev, bcast, buf, ETHER_TYPE_ARP);
 }
 
 static int
@@ -148,6 +173,8 @@ recvarpreq(NETDEV *dev, ARP *arp, size_t nbytes)
 	
 	// sender information
 	addarptable(dev, arp->sha, ntohl(arp->sip));
+
+	return 0;
 }
 
 static int
@@ -155,18 +182,21 @@ recvarpreply(NETDEV *dev, ARP *arp, size_t nbytes)
 {
 	// add to arp table
 	addarptable(dev, arp->sha, ntohl(arp->sip));
+
+	return 0;
 }
 
 int
-recvarp(NETDEV *dev, uchar *packet, size_t nbytes)
+recvarp(NETDEV *dev, SKBUF *buf)
 {
 	ARP *arp;
+	size_t size = buf->size;
 
-	if (nbytes < sizeof(ARP)) {
+	if (size < sizeof(ARP)) {
 		return -1;
 	}
 
-	arp = (ARP *)packet;
+	arp = (ARP *)buf->data;
 
 	if (ntohs(arp->pro) != ETHER_TYPE_IPV4) {
 		return -1;
@@ -174,9 +204,9 @@ recvarp(NETDEV *dev, uchar *packet, size_t nbytes)
 
 	switch (ntohs(arp->op)) {
 	case ARPOP_REQUEST:
-		return recvarpreq(dev, arp, nbytes);
+		return recvarpreq(dev, arp, size);
 	case ARPOP_REPLY:
-		return recvarpreply(dev, arp, nbytes);
+		return recvarpreply(dev, arp, size);
 	default:
 		break;
 	}

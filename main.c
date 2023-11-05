@@ -14,8 +14,8 @@
 
 #include "net.h"
 
-static NETDEV *netdev[16];
-static int ndev;
+NETDEV *netdev[16];
+int ndev;
 static bool term = false;
 
 static int

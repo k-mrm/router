@@ -30,4 +30,6 @@ struct ARPCACHE {
 	ARPCACHE *next;
 };
 
+int recvarp(NETDEV *dev, SKBUF *buf);
+
 #endif
