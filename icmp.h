@@ -38,4 +38,8 @@ struct ICMP_UNREACHABLE {
 	uchar data[0];
 };
 
+int icmptimeexceeded(NETDEV *dev, IP dst, SKBUF *pkt);
+int icmpechoreply(NETDEV *dev, IP dst, SKBUF *echo);
+int recvicmp(NETDEV *dev, IP src, SKBUF *buf);
+
 #endif	// __ROUTER_ICMP_H

@@ -12,11 +12,29 @@
 #include <netinet/if_ether.h>
 #include <linux/if_packet.h>
 
+#include "types.h"
 #include "net.h"
+#include "route.h"
 
 NETDEV *netdev[16];
 int ndev;
 static bool term = false;
+
+static IP nexthop = IPADDRESS(192, 168, 0, 1);
+
+static void
+netdevconfig()
+{
+	NETDEV *dev;
+
+	for (int i = 0; i < ndev; i++) {
+		dev = netdev[i];
+		rtaddconnected(dev->ipv4.subnet, dev->ipv4.netmask, dev);
+	}
+
+	// default
+	rtaddnexthop(IPADDRESS(0,0,0,0), IPADDRESS(0,0,0,0), nexthop);
+}
 
 static int
 disableipforward()
@@ -91,6 +109,8 @@ main(int argc, char **argv)
 	if (ndev == 0) {
 		return -1;
 	}
+
+	netdevconfig();
 
 	disableipforward();
 

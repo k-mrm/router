@@ -46,13 +46,14 @@ struct SKBUF {
 
 SKBUF *skalloc(size_t size);
 void skfree(SKBUF *buf);
-void *skpush(SKBUF *buf, size_t size);
 
+void *skpush(SKBUF *buf, size_t size);
 void *skpull(SKBUF *buf, size_t size);
 void *skpulleth(SKBUF *buf);
 void *skpullip(SKBUF *buf);
 
 void skcopy(SKBUF *buf, uchar *src, size_t n);
+
 ushort checksum(uchar *buf, size_t n);
 
 #endif

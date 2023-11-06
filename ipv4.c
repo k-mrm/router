@@ -85,14 +85,58 @@ recvipv4(NETDEV *dev, SKBUF *buf)
 		return -1;
 	}
 
-	iphdr->check = 0;
-	iphdr->check = checksum((uchar *)iphdr, buf->iphdrsz);
-
 	return 0;
+}
+
+static int
+routeipv4(NETDEV *dev, IP dst, SKBUF *buf)
+{
+	uchar *dst;
+
+	/*
+	if (i2m) {
+		dst = ;
+	} else {
+		// next hop
+	}
+	*/
+
+	// return sendether(dev, dst, buf, ETHER_TYPE_IPV4);
+	return -1;
 }
 
 int
 sendipv4(NETDEV *dev, IP dst, SKBUF *buf, uchar proto)
 {
-	;
+	static ushort id = 0;
+	struct iphdr *ip;
+	ushort total = 0;
+	IP src;
+
+	ip = skpush(buf, sizeof *ip);
+	if (!ip) {
+		return -1;
+	}
+
+	src = dev->ipv4.addr;
+
+	total = buf->size;
+
+	ip->version = 4;
+	ip->ihl = sizeof(*ip) >> 2;
+	ip->protocol = proto;
+	ip->ttl = 64;
+	ip->tos = 0;
+	ip->frag_off = 0;
+	ip->id = id++;
+
+	ip->tot_len = htons(total);
+
+	ip->daddr = htonl(dst);
+	ip->saddr = htonl(src);
+
+	ip->check = 0;
+	ip->check = checksum((uchar *)ip, sizeof *ip);
+
+	return routeipv4(dst, buf);
 }
