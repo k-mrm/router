@@ -13,6 +13,8 @@
 
 #include "net.h"
 #include "ether.h"
+#include "ipv4.h"
+#include "arp.h"
 
 int
 recvether(NETDEV *dev)
@@ -83,7 +85,7 @@ sendether(NETDEV *dev, uchar *daddr, SKBUF *buf, ushort type)
 	ethaddrcpy(eth->ether_shost, saddr);
 	eth->ether_type = htons(type);
 
-	sendpacket(dev, buf);
+	return sendpacket(dev, buf);
 }
 
 void

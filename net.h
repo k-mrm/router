@@ -56,4 +56,7 @@ void skcopy(SKBUF *buf, uchar *src, size_t n);
 
 ushort checksum(uchar *buf, size_t n);
 
+ssize_t sendpacket(NETDEV *dev, SKBUF *buf);
+ssize_t recvpacket(NETDEV *dev, uchar *buf, size_t nbuf);
+
 #endif

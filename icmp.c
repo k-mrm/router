@@ -28,7 +28,7 @@ sendicmp(NETDEV *dev, IP dst, uchar type, uchar code, SKBUF *buf)
 
 	src = dev->ipv4.addr;
 
-	return sendipv4(dev, dst, src, buf, IPPROTO_ICMP);
+	return sendipv4(dst, src, buf, IPPROTO_ICMP);
 }
 
 int

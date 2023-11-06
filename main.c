@@ -16,6 +16,7 @@
 #include "net.h"
 #include "route.h"
 #include "ipv4.h"
+#include "ether.h"
 
 NETDEV *netdev[16];
 int ndev;
@@ -55,7 +56,6 @@ static int
 routercore(struct pollfd *fd)
 {
 	int nready;
-	ssize_t size;
 	NETDEV *dev;
 
 	nready = poll(fd, ndev, -1);

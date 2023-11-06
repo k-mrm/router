@@ -13,6 +13,7 @@
 #include "ether.h"
 #include "route.h"
 #include "arp.h"
+#include "icmp.h"
 
 static void
 handlemypkt(NETDEV *dev, IP src, SKBUF *buf)
@@ -57,7 +58,6 @@ routeipv4(IP dst, SKBUF *buf)
 {
 	NETDEV *dev;
 	ROUTE *rt;
-	uchar *dstmac;
 	ARPCACHE *arp;
 
 	rt = rtsearch(dst);
@@ -76,7 +76,7 @@ routeipv4(IP dst, SKBUF *buf)
 			sendarpreq(dev, dst);
 		}
 
-		return sendether(dev, arp->hwaddr, buf, ETHER_TYPE_IPV4);
+		// return sendether(dev, arp->hwaddr, buf, ETHER_TYPE_IPV4);
 	} else if (rt->type == NEXTHOP) {
 		IP nexthop = rt->nexthop;
 
@@ -98,7 +98,7 @@ routeipv4(IP dst, SKBUF *buf)
 			sendarpreq(dev, nexthop);
 		}
 
-		return sendether(arp->dev, arp->hwaddr, buf, ETHER_TYPE_IPV4);
+		// return sendether(arp->dev, arp->hwaddr, buf, ETHER_TYPE_IPV4);
 	} else {
 		return -1;
 	}
@@ -138,9 +138,12 @@ recvipv4(NETDEV *dev, SKBUF *buf)
 	iphdr->ttl--;
 	if (iphdr->ttl == 0) {
 		printf("packet ttl0\n");
-		icmptimeexceeded(dev, src);
+		icmptimeexceeded(dev, src, buf);
 		return -1;
 	}
+
+	iphdr->check = 0;
+	iphdr->check = checksum((uchar *)iphdr, buf->iphdrsz);
 
 	skpush(buf, buf->iphdrsz);
 
@@ -151,7 +154,7 @@ recvipv4(NETDEV *dev, SKBUF *buf)
 }
 
 int
-sendipv4(NETDEV *dev, IP dst, IP src, SKBUF *buf, uchar proto)
+sendipv4(IP dst, IP src, SKBUF *buf, uchar proto)
 {
 	static ushort id = 0;
 	struct iphdr *ip;
