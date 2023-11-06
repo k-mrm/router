@@ -5,9 +5,14 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/if_ether.h>
 
 #include "types.h"
 #include "net.h"
+#include "ether.h"
+#include "route.h"
+#include "arp.h"
 
 static void
 handlemypkt(NETDEV *dev, IP src, SKBUF *buf)
@@ -45,6 +50,58 @@ mypacket(SKBUF *buf, IP dst, IP src)
 	}
 
 	return 0;
+}
+
+static int
+routeipv4(IP dst, SKBUF *buf)
+{
+	NETDEV *dev;
+	ROUTE *rt;
+	uchar *dstmac;
+	ARPCACHE *arp;
+
+	rt = rtsearch(dst);
+
+	if (!rt) {
+		// drop
+		return -1;
+	}
+
+	if (rt->type == CONNECTED) {
+		dev = rt->connect;
+		arp = searcharptable(dst);
+
+		if (!arp) {
+			// Who is dst?
+			sendarpreq(dev, dst);
+		}
+
+		return sendether(dev, arp->hwaddr, buf, ETHER_TYPE_IPV4);
+	} else if (rt->type == NEXTHOP) {
+		IP nexthop = rt->nexthop;
+
+		arp = searcharptable(nexthop);
+
+		if (!arp) {
+			// Who is nexthop?
+			ROUTE *rnexthop;
+
+			rnexthop = rtsearch(nexthop);
+
+			if (!rnexthop || rnexthop->type != CONNECTED) {
+				// nexthop?
+				return -1;
+			}
+
+			dev = rnexthop->connect;
+
+			sendarpreq(dev, nexthop);
+		}
+
+		return sendether(arp->dev, arp->hwaddr, buf, ETHER_TYPE_IPV4);
+	} else {
+		return -1;
+	}
 }
 
 int
@@ -85,40 +142,25 @@ recvipv4(NETDEV *dev, SKBUF *buf)
 		return -1;
 	}
 
+	skpush(buf, buf->iphdrsz);
+
+	// routing
+	routeipv4(dst, buf);
+
 	return 0;
 }
 
-static int
-routeipv4(NETDEV *dev, IP dst, SKBUF *buf)
-{
-	uchar *dst;
-
-	/*
-	if (i2m) {
-		dst = ;
-	} else {
-		// next hop
-	}
-	*/
-
-	// return sendether(dev, dst, buf, ETHER_TYPE_IPV4);
-	return -1;
-}
-
 int
-sendipv4(NETDEV *dev, IP dst, SKBUF *buf, uchar proto)
+sendipv4(NETDEV *dev, IP dst, IP src, SKBUF *buf, uchar proto)
 {
 	static ushort id = 0;
 	struct iphdr *ip;
 	ushort total = 0;
-	IP src;
 
 	ip = skpush(buf, sizeof *ip);
 	if (!ip) {
 		return -1;
 	}
-
-	src = dev->ipv4.addr;
 
 	total = buf->size;
 

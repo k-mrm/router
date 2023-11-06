@@ -40,6 +40,7 @@ struct ICMP_UNREACHABLE {
 
 int icmptimeexceeded(NETDEV *dev, IP dst, SKBUF *pkt);
 int icmpechoreply(NETDEV *dev, IP dst, SKBUF *echo);
+int icmpunreachable(NETDEV *dev, IP dst, SKBUF *pkt);
 int recvicmp(NETDEV *dev, IP src, SKBUF *buf);
 
 #endif	// __ROUTER_ICMP_H

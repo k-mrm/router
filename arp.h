@@ -31,5 +31,7 @@ struct ARPCACHE {
 };
 
 int recvarp(NETDEV *dev, SKBUF *buf);
+int sendarpreq(NETDEV *dev, IP tip);
+ARPCACHE *searcharptable(IP ipaddr);
 
 #endif

@@ -15,6 +15,7 @@
 #include "types.h"
 #include "net.h"
 #include "route.h"
+#include "ipv4.h"
 
 NETDEV *netdev[16];
 int ndev;

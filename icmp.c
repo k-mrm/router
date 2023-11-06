@@ -15,6 +15,7 @@ static int
 sendicmp(NETDEV *dev, IP dst, uchar type, uchar code, SKBUF *buf)
 {
 	ICMPHDR *icmp;
+	IP src;
 
 	icmp = skpush(buf, sizeof(ICMPHDR));
 	if (!icmp) {
@@ -25,7 +26,9 @@ sendicmp(NETDEV *dev, IP dst, uchar type, uchar code, SKBUF *buf)
 	icmp->code = code;
 	icmp->checksum = htonl(checksum((uchar *)icmp, buf->size));
 
-	return sendipv4(dev, dst, buf, IPPROTO_ICMP);
+	src = dev->ipv4.addr;
+
+	return sendipv4(dev, dst, src, buf, IPPROTO_ICMP);
 }
 
 int
