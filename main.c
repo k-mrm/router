@@ -102,13 +102,15 @@ main(int argc, char **argv)
 	for (int i = 1; i < argc; i++) {
 		dev = opennetdev(argv[i], 1);
 		if (!dev) {
-			return -1;
+			printf("cannot open %s\n", argv[i]);
+			continue;
 		}
 
 		netdev[ndev++] = dev;
 	}
 
 	if (ndev == 0) {
+		bug("no device, aborted");
 		return -1;
 	}
 

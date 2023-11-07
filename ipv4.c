@@ -56,7 +56,7 @@ mypacket(SKBUF *buf, IP dst, IP src)
 static int
 schedule(NETDEV *dev, IP dst, SKBUF *buf)
 {
-	;
+	return -1;
 }
 
 static int

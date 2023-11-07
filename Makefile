@@ -1,7 +1,7 @@
 CC = gcc
 LD = ld
 
-CFLAGS += -Wall -Wextra -I ./ -Og
+CFLAGS += -Wall -Wextra -I ./ -Og -g
 
 TARGET = router
 OBJS = arp.o ether.o icmp.o ipv4.o main.o net.o route.o

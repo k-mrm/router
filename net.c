@@ -40,8 +40,8 @@ sigtrap()
 NETDEV *
 opennetdev(const char *name, bool promisc)
 {
-	struct ifreq ifr;
-	struct sockaddr_ll sa;
+	struct ifreq ifr = {0};
+	struct sockaddr_ll sa = {0};
 	struct sockaddr_in *sin;
 	NETDEV *dev;
 
@@ -52,8 +52,10 @@ opennetdev(const char *name, bool promisc)
 	dev->name = name;
 
 	dev->soc = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-	if (dev->soc < 0)
+	if (dev->soc < 0) {
+		perror("soc");
 		goto err;
+	}
 
 	strncpy(ifr.ifr_name, name, sizeof(ifr.ifr_name) - 1);
 

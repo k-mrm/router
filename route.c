@@ -18,6 +18,7 @@ rtadd(IP subnet, IP mask, ROUTETYPE type, IP nexthop, NETDEV *con)
 	rt = &routetable[nrt++];
 
 	if (nrt == 128) {
+		bug("too many table");
 		return -1;
 	}
 
@@ -30,7 +31,7 @@ rtadd(IP subnet, IP mask, ROUTETYPE type, IP nexthop, NETDEV *con)
 	} else if (type == CONNECTED) {
 		rt->connect = con;
 	} else {
-		return -1;
+		bug("unreachable");
 	}
 
 	return 0;

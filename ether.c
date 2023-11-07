@@ -24,7 +24,7 @@ recvether(NETDEV *dev)
 	uchar b[4096];
 	ssize_t nbytes;
 	SKBUF *buf;
-	int rc;
+	int rc = -1;
 
 	nbytes = recvpacket(dev, b, 4096);
 	if (nbytes < 0) {
@@ -39,7 +39,6 @@ recvether(NETDEV *dev)
 
 	eth = skpulleth(buf);
 	if (!eth) {
-		rc = -1;
 		goto err;
 	}
 
