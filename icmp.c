@@ -24,7 +24,8 @@ sendicmp(NETDEV *dev, IP dst, uchar type, uchar code, SKBUF *buf)
 
 	icmp->type = type;
 	icmp->code = code;
-	icmp->checksum = htonl(checksum((uchar *)icmp, buf->size));
+	icmp->checksum = 0;
+	icmp->checksum = checksum((uchar *)icmp, buf->size);
 
 	src = dev->ipv4.addr;
 
@@ -70,6 +71,7 @@ icmpunreachable(NETDEV *dev, IP dst, SKBUF *pkt)
 int
 icmpechoreply(NETDEV *dev, IP dst, SKBUF *echo)
 {
+	skref(echo);
 	return sendicmp(dev, dst, ICMP_TYPE_ECHO_RESPONSE, 0, echo);
 }
 
@@ -77,6 +79,7 @@ int
 recvicmp(NETDEV *dev, IP src, SKBUF *buf)
 {
 	ICMPHDR *hdr;
+	char dbg[16];
 
 	hdr = skpull(buf, sizeof(ICMPHDR));
 	if (!hdr) {
@@ -85,6 +88,7 @@ recvicmp(NETDEV *dev, IP src, SKBUF *buf)
 
 	switch (hdr->type) {
 	case ICMP_TYPE_ECHO_REQUEST:
+		printf ("%s: ICMP echo request from %s %x\n", dev->name, ipv4addrfmt(src, dbg), hdr->checksum);
 		return icmpechoreply(dev, src, buf);
 
 	default:

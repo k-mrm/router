@@ -65,6 +65,7 @@ routeipv4(IP dst, SKBUF *buf)
 	NETDEV *dev;
 	ROUTE *rt;
 	ARPCACHE *arp;
+	char dbg[16], dbg2[16], dbg3[32];
 
 	rt = rtsearch(dst);
 
@@ -77,6 +78,8 @@ routeipv4(IP dst, SKBUF *buf)
 		dev = rt->connect;
 		arp = searcharptable(dst);
 
+		printf("%s route to %s\n", ipv4addrfmt(dst, dbg), dev->name);
+
 		if (!arp) {
 			// Who is dst?
 			sendarpreq(dev, dst);
@@ -84,11 +87,14 @@ routeipv4(IP dst, SKBUF *buf)
 			return schedule(dev, dst, buf);
 		}
 		else {
+			printf("directconnect: --> %s\n", hwaddrfmt(arp->hwaddr, dbg3));
 			return sendether(dev, arp->hwaddr, buf, ETHER_TYPE_IPV4);
 		}
 	}
 	else if (rt->type == NEXTHOP) {
 		IP nexthop = rt->nexthop;
+
+		printf("%s route to nexthop(%s)\n", ipv4addrfmt(dst, dbg), ipv4addrfmt(nexthop, dbg2));
 
 		arp = searcharptable(nexthop);
 
@@ -158,13 +164,15 @@ recvipv4(NETDEV *dev, SKBUF *buf)
 		return -1;
 	}
 
+	// recalculate checksum
 	iphdr->check = 0;
 	iphdr->check = checksum((uchar *)iphdr, buf->iphdrsz);
 
 	skpush(buf, buf->iphdrsz);
 	skref(buf);
 
-	printf("routing packet -> %s\n", ipv4addrfmt(dst, dbg));
+	printf("%s recv ip: from %s ", dev->name, ipv4addrfmt(src, dbg));
+	printf(" -> %s\n", ipv4addrfmt(dst, dbg));
 	// routing
 	routeipv4(dst, buf);
 
@@ -188,10 +196,10 @@ sendipv4(IP dst, IP src, SKBUF *buf, uchar proto)
 	ip->version = 4;
 	ip->ihl = sizeof(*ip) >> 2;
 	ip->protocol = proto;
-	ip->ttl = 64;
+	ip->ttl = 32;
 	ip->tos = 0;
 	ip->frag_off = 0;
-	ip->id = id++;
+	ip->id = htons(id++);
 
 	ip->tot_len = htons(total);
 
