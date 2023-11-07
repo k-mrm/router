@@ -37,6 +37,41 @@ sigtrap()
 	signal(SIGTERM, sighandler);
 }
 
+void
+hwaddrfmt(uchar *mac, char *str)
+{
+	snprintf(str, 32, "%02x:%02x:%02x:%02x:%02x:%02x",
+		 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+// ipaddr must be little-endian
+void
+ipv4addrfmt(IP ipaddr, char *str)
+{
+	uchar *ip;
+
+	ipaddr = htonl(ipaddr);
+	ip = (uchar *)&ipaddr;
+
+	snprintf(str, 16, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+}
+
+void
+pnetdev(NETDEV *dev)
+{
+	char ip[16];
+	char mask[16];
+	char sub[16];
+	char mac[32];
+
+	hwaddrfmt(dev->hwaddr, mac);
+	ipv4addrfmt(dev->ipv4.addr, ip);
+	ipv4addrfmt(dev->ipv4.netmask, mask);
+	ipv4addrfmt(dev->ipv4.subnet, sub);
+
+	printf("%s: hw=%s ip=%s mask=%s sub=%s\n", dev->name, mac, ip, mask, sub);
+}
+
 NETDEV *
 opennetdev(const char *name, bool promisc)
 {
@@ -152,11 +187,11 @@ recvpacket(NETDEV *dev, uchar *buf, size_t nbuf)
 SKBUF *
 skalloc(size_t size)
 {
-	SKBUF *skbuf;
+	SKBUF *skb;
 	void *buf;
 
-	skbuf = malloc(sizeof *skbuf);
-	if (!skbuf) {
+	skb = malloc(sizeof *skb);
+	if (!skb) {
 		return NULL;
 	}
 
@@ -165,15 +200,16 @@ skalloc(size_t size)
 		return NULL;
 	}
 
+	memset(skb, 0, sizeof *skb);
 	memset(buf, 0, size + 64);
 
-	skbuf->head = buf;
-	skbuf->data = buf + 64;
-	skbuf->tail = buf + size + 64;
-	skbuf->size = size;
-	skbuf->ref = 1;
+	skb->head = buf;
+	skb->data = buf + 64;
+	skb->tail = buf + size + 64;
+	skb->size = size;
+	skb->ref = 1;
 
-	return skbuf;
+	return skb;
 }
 
 void *
@@ -189,7 +225,7 @@ skpush(SKBUF *buf, size_t size)
 	buf->data = data;
 	buf->size += size;
 
-	return buf;
+	return data;
 }
 
 void
@@ -251,6 +287,11 @@ void
 skfree(SKBUF *skb)
 {
 	void *buf;
+	printf("skfree: %p\n", skb);
+
+	if (!skb) {
+		return;
+	}
 
 	if (!skb->ref) {
 		bug("double free");

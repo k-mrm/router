@@ -19,7 +19,7 @@
 #include "ether.h"
 
 NETDEV *netdev[16];
-int ndev;
+int ndev = 0;
 bool term = false;
 
 static IP nexthop = IPADDRESS(192, 168, 0, 1);
@@ -28,6 +28,7 @@ static void
 netdevconfig()
 {
 	NETDEV *dev;
+	char ip[32];
 
 	for (int i = 0; i < ndev; i++) {
 		dev = netdev[i];
@@ -36,6 +37,8 @@ netdevconfig()
 
 	// default
 	rtaddnexthop(IPADDRESS(0,0,0,0), IPADDRESS(0,0,0,0), nexthop);
+	ipv4addrfmt(nexthop, ip);
+	printf("nexthop: %s\n", ip);
 }
 
 static int
@@ -107,6 +110,7 @@ main(int argc, char **argv)
 		}
 
 		netdev[ndev++] = dev;
+		pnetdev(dev);
 	}
 
 	if (ndev == 0) {
