@@ -86,7 +86,6 @@ routeipv4(IP dst, SKBUF *buf)
 		else {
 			return sendether(dev, arp->hwaddr, buf, ETHER_TYPE_IPV4);
 		}
-
 	}
 	else if (rt->type == NEXTHOP) {
 		IP nexthop = rt->nexthop;
@@ -127,6 +126,7 @@ recvipv4(NETDEV *dev, SKBUF *buf)
 	ushort sum;
 	IP src, dst;
 	int rc;
+	char dbg[16];
 
 	iphdr = skpullip(buf);
 	if (!iphdr) {
@@ -162,7 +162,9 @@ recvipv4(NETDEV *dev, SKBUF *buf)
 	iphdr->check = checksum((uchar *)iphdr, buf->iphdrsz);
 
 	skpush(buf, buf->iphdrsz);
+	skref(buf);
 
+	printf("routing packet -> %s\n", ipv4addrfmt(dst, dbg));
 	// routing
 	routeipv4(dst, buf);
 

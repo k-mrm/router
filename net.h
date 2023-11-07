@@ -37,8 +37,8 @@ void sigtrap(void);
 NETDEV *opennetdev(const char *name, bool promisc);
 void pnetdev(NETDEV *dev);
 
-void ipv4addrfmt(IP ipaddr, char *str);
-void hwaddrfmt(uchar *mac, char *str);
+char *ipv4addrfmt(IP ipaddr, char *str);
+char *hwaddrfmt(uchar *mac, char *str);
 
 // socket buffer
 struct SKBUF {
