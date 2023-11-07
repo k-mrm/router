@@ -54,6 +54,12 @@ mypacket(SKBUF *buf, IP dst, IP src)
 }
 
 static int
+schedule(NETDEV *dev, IP dst, SKBUF *buf)
+{
+	;
+}
+
+static int
 routeipv4(IP dst, SKBUF *buf)
 {
 	NETDEV *dev;
@@ -74,32 +80,42 @@ routeipv4(IP dst, SKBUF *buf)
 		if (!arp) {
 			// Who is dst?
 			sendarpreq(dev, dst);
+
+			return schedule(dev, dst, buf);
+		}
+		else {
+			return sendether(dev, arp->hwaddr, buf, ETHER_TYPE_IPV4);
 		}
 
-		// return sendether(dev, arp->hwaddr, buf, ETHER_TYPE_IPV4);
-	} else if (rt->type == NEXTHOP) {
+	}
+	else if (rt->type == NEXTHOP) {
 		IP nexthop = rt->nexthop;
 
 		arp = searcharptable(nexthop);
 
 		if (!arp) {
-			// Who is nexthop?
 			ROUTE *rnexthop;
 
+			// Who is nexthop?
 			rnexthop = rtsearch(nexthop);
 
 			if (!rnexthop || rnexthop->type != CONNECTED) {
-				// nexthop?
+				// no nexthop ;;
 				return -1;
 			}
 
 			dev = rnexthop->connect;
 
 			sendarpreq(dev, nexthop);
-		}
 
-		// return sendether(arp->dev, arp->hwaddr, buf, ETHER_TYPE_IPV4);
-	} else {
+			return schedule(dev, nexthop, buf);
+		}
+		else {
+			return sendether(arp->dev, arp->hwaddr, buf, ETHER_TYPE_IPV4);
+		}
+	}
+	else {
+		bug("unreachable");
 		return -1;
 	}
 }

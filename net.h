@@ -12,6 +12,8 @@
 typedef struct NETDEV NETDEV;
 typedef struct SKBUF SKBUF;
 
+extern bool term;
+
 struct NETDEV {
 	int soc;
 	const char *name;
@@ -29,6 +31,8 @@ struct NETDEV {
 extern NETDEV *netdev[16];
 extern int ndev;
 
+void bug(const char *fmt);
+void sigtrap(void);
 NETDEV *opennetdev(const char *name, bool promisc);
 
 // socket buffer
@@ -37,6 +41,7 @@ struct SKBUF {
 	void *data;
 	void *tail;
 	size_t size;
+	uint ref;	// refcount
 
 	// header tracking
 	struct ether_header *eth;
@@ -46,6 +51,8 @@ struct SKBUF {
 
 SKBUF *skalloc(size_t size);
 void skfree(SKBUF *buf);
+
+void skref(SKBUF *buf);
 
 void *skpush(SKBUF *buf, size_t size);
 void *skpull(SKBUF *buf, size_t size);

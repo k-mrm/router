@@ -20,7 +20,7 @@
 
 NETDEV *netdev[16];
 int ndev;
-static bool term = false;
+bool term = false;
 
 static IP nexthop = IPADDRESS(192, 168, 0, 1);
 
@@ -43,8 +43,9 @@ disableipforward()
 {
 	FILE *fp;
 
-	if (!(fp = fopen("/proc/sys/net/ipv4/ip_forward", "w")))
+	if (!(fp = fopen("/proc/sys/net/ipv4/ip_forward", "w"))) {
 		return -1;
+	}
 	fputs("0", fp);
 
 	fclose(fp);
@@ -111,8 +112,8 @@ main(int argc, char **argv)
 		return -1;
 	}
 
+	sigtrap();
 	netdevconfig();
-
 	disableipforward();
 
 	rc = router();

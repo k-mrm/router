@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -14,6 +15,27 @@
 
 #include "net.h"
 #include "ether.h"
+
+void
+bug(const char *fmt)
+{
+	fprintf(stderr, "%s\n", fmt);
+	term = true;
+}
+
+static void
+sighandler(int sig)
+{
+	fprintf(stderr, "terminated: reason %d\n", sig);
+	term = true;
+}
+
+void
+sigtrap()
+{
+	signal(SIGINT, sighandler);
+	signal(SIGTERM, sighandler);
+}
 
 NETDEV *
 opennetdev(const char *name, bool promisc)
@@ -112,7 +134,11 @@ err:
 ssize_t
 sendpacket(NETDEV *dev, SKBUF *buf)
 {
-	return write(dev->soc, buf->data, buf->size);
+	ssize_t len = write(dev->soc, buf->data, buf->size);
+
+	skfree(buf);
+
+	return len;
 }
 
 ssize_t
@@ -143,6 +169,7 @@ skalloc(size_t size)
 	skbuf->data = buf + 64;
 	skbuf->tail = buf + size + 64;
 	skbuf->size = size;
+	skbuf->ref = 1;
 
 	return skbuf;
 }
@@ -161,6 +188,12 @@ skpush(SKBUF *buf, size_t size)
 	buf->size += size;
 
 	return buf;
+}
+
+void
+skref(SKBUF *buf)
+{
+	buf->ref++;
 }
 
 void *
@@ -213,14 +246,21 @@ skcopy(SKBUF *buf, uchar *src, size_t n)
 }
 
 void
-skfree(SKBUF *skbuf)
+skfree(SKBUF *skb)
 {
 	void *buf;
 
-	buf = skbuf->head;
+	if (!skb->ref) {
+		bug("double free");
+		return;
+	}
 
-	free(buf);
-	free(skbuf);
+	if (--skb->ref == 0) {
+		buf = skb->head;
+
+		free(buf);
+		free(skb);
+	}
 }
 
 ushort
