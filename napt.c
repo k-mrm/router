@@ -37,27 +37,40 @@ confignat(IP inip, IP inmask, IP out)
 	}
 }
 
+typedef enum PORTTYPE PORTTYPE;
+
+enum PORTTYPE {
+	DST,
+	SRC,
+};
+
 static int
-srcport(SKBUF *buf, uchar proto, ushort *lport)
+getport(SKBUF *buf, uchar proto, PORTTYPE type, ushort *port)
 {
 	void *packet = buf->data;
-
-	if (!lport) {
-		return -1;
-	}
 
 	switch (proto) {
 	case IPPROTO_TCP: {
 		TCP_HDR *tcp = packet;
 
-		*lport = ntohs(tcp->srcport);
+		if (type == DST) {
+			*port = ntohs(tcp->dstport);
+		}
+		else {	// SRC
+			*port = ntohs(tcp->srcport);
+		}
 
 		return 0;
 	}
 	case IPPROTO_UDP: {
 		UDP_HDR *udp = packet;
 
-		*lport = ntohs(udp->srcport);
+		if (type == DST) {
+			*port = ntohs(udp->dstport);
+		}
+		else {	// SRC
+			*port = ntohs(udp->srcport);
+		}
 
 		return 0;
 	}
@@ -70,7 +83,7 @@ srcport(SKBUF *buf, uchar proto, ushort *lport)
 			return -1;
 		}
 
-		*lport = ntohs(icmp->ident);
+		*port = ntohs(icmp->ident);
 
 		return 0;
 	}
@@ -297,15 +310,18 @@ naptin(NAPT *napt, SKBUF *buf)
 	proto = iphdr->protocol;
 	gip = ntohl(iphdr->daddr);
 
-	rc = srcport(buf, proto, &gport);
+	rc = getport(buf, proto, DST, &gport);
 	if (rc < 0) {
 		return -1;
 	}
 
+	printf("NAPT search : proto=%d gip=%x gport=%d ", proto, gip, gport);
 	ent = naptgsearch(&napt->table, proto, gip, gport);
 	if (!ent) {
+		printf(" failed\n");
 		return -1;
 	}
+	printf(" get lip=%x lport=%d\n", ent->lip, ent->lport);
 
 	// rewrite packet
 	return rebuild(buf, proto, ent, INCOMING);
@@ -326,7 +342,7 @@ naptout(NAPT *napt, SKBUF *buf)
 	lip = ntohl(iphdr->saddr);
 	gip = napt->out;
 
-	rc = srcport(buf, proto, &lport);
+	rc = getport(buf, proto, SRC, &lport);
 	if (rc < 0) {
 		return -1;
 	}
@@ -338,6 +354,7 @@ naptout(NAPT *napt, SKBUF *buf)
 		if (!ent) {
 			return -1;
 		}
+		printf("NAPT new : lip=%x gip=%x lport=%d gport=%d\n", lip, gip, lport, ent->gport);
 
 		ent->lip = lip;
 		ent->gip = gip;

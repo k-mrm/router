@@ -38,6 +38,7 @@ mypacket(SKBUF *buf, IP dst, IP src, bool *napted)
 {
 	NETDEV *dev;
 	int rc;
+	char dbg[16], dbg2[16];
 
 	*napted = false;
 
@@ -47,6 +48,7 @@ mypacket(SKBUF *buf, IP dst, IP src, bool *napted)
 		if (dev->napt && dev->napt->out == dst) {
 			rc = napt(dev->napt, INCOMING, buf);
 			if (rc == 0) {
+				printf("IN NAPT! %s: dst=%s src=%s\n", dev->name, ipv4addrfmt(dst, dbg), ipv4addrfmt(src, dbg2));
 				*napted = true;
 				return 0;
 			}
@@ -72,17 +74,22 @@ schedule(NETDEV *dev, IP dst, SKBUF *buf)
 }
 
 static int
-routeipv4(IP dst, SKBUF *buf)
+routeipv4(SKBUF *buf)
 {
 	NETDEV *dev;
 	ROUTE *rt;
 	ARPCACHE *arp;
 	char dbg[16], dbg2[16], dbg3[32];
+	struct iphdr *iphdr = buf->data;
+	IP dst;
+
+	dst = ntohl(iphdr->daddr);
 
 	rt = rtsearch(dst);
 
 	if (!rt) {
 		// drop
+		bug("?");
 		return -1;
 	}
 
@@ -187,10 +194,10 @@ sendip:
 	skpush(buf, buf->iphdrsz);
 	skref(buf);
 
-	printf("%s recv ip: from %s ", dev->name, ipv4addrfmt(src, dbg));
-	printf(" -> %s\n", ipv4addrfmt(dst, dbg));
+	printf("%s recv ip: from %s ", dev->name, ipv4addrfmt(ntohl(buf->iphdr->saddr), dbg));
+	printf(" -> %s\n", ipv4addrfmt(ntohl(buf->iphdr->daddr), dbg));
 	// routing
-	routeipv4(dst, buf);
+	routeipv4(buf);
 
 	return 0;
 }
@@ -225,5 +232,5 @@ sendipv4(IP dst, IP src, SKBUF *buf, uchar proto)
 	ip->check = 0;
 	ip->check = checksum((uchar *)ip, sizeof *ip);
 
-	return routeipv4(dst, buf);
+	return routeipv4(buf);
 }
