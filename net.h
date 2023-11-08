@@ -11,9 +11,10 @@
 
 struct NAPT;
 
-typedef struct NAPT	NAPT;
-typedef struct NETDEV	NETDEV;
-typedef struct SKBUF	SKBUF;
+typedef struct NAPT		NAPT;
+typedef struct NETDEV		NETDEV;
+typedef struct SKBUF		SKBUF;
+typedef struct IP_PSEUDO	IP_PSEUDO;
 
 extern bool term;
 
@@ -64,6 +65,15 @@ struct SKBUF {
 	uchar ipproto;
 };
 
+// pseudo IP header
+struct IP_PSEUDO {
+	uint srcip;
+	uint dstip;
+	uchar reserved;
+	uchar proto;
+	ushort len;
+};
+
 SKBUF *skalloc(size_t size);
 void skfree(SKBUF *buf);
 ushort ipchecksum(SKBUF *buf);
@@ -78,6 +88,7 @@ void *skpullip(SKBUF *buf);
 void skcopy(SKBUF *buf, uchar *src, size_t n);
 
 ushort checksum(uchar *buf, size_t n);
+ushort checksum2(uchar *buf1, size_t n1, uchar *buf2, size_t n2);
 
 ssize_t sendpacket(NETDEV *dev, SKBUF *buf);
 ssize_t recvpacket(NETDEV *dev, uchar *buf, size_t nbuf);

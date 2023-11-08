@@ -82,8 +82,14 @@ routeipv4(SKBUF *buf)
 	char dbg[16], dbg2[16], dbg3[32];
 	struct iphdr *iphdr = buf->data;
 	IP dst;
+	ushort csum;
 
 	dst = ntohl(iphdr->daddr);
+	csum = iphdr->check;
+
+	if (!csum) {
+		bug("oi");
+	}
 
 	rt = rtsearch(dst);
 

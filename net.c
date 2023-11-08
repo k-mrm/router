@@ -357,6 +357,52 @@ skfree(SKBUF *skb)
 }
 
 ushort
+checksum2(uchar *buf1, size_t n1, uchar *buf2, size_t n2)
+{
+	uint sum = 0;
+	ushort *ptr = (ushort *)buf1;
+	size_t i;
+
+	for (i = n1; i > 1; i -= 2) {
+		sum += *ptr;
+		if (sum & 0x80000000) {
+			sum = (sum & 0xffff) + (sum >> 16);
+		}
+		ptr++;
+	}
+	if (i == 1) {
+		ushort a = 0;
+		*(uchar *)&a = *(uchar *)ptr;
+		sum += a;
+	}
+
+	while (sum >> 16) {
+		sum = (sum & 0xffff) + (sum >> 16);
+	}
+
+	ptr = (ushort *)buf2;
+
+	for (i = n2; i > 1; i -= 2) {
+		sum += *ptr;
+		if (sum & 0x80000000) {
+			sum = (sum & 0xffff) + (sum >> 16);
+		}
+		ptr++;
+	}
+	if (i == 1) {
+		ushort a = 0;
+		*(uchar *)&a = *(uchar *)ptr;
+		sum += a;
+	}
+
+	while (sum >> 16) {
+		sum = (sum & 0xffff) + (sum >> 16);
+	}
+	
+	return ~sum;
+}
+
+ushort
 checksum(uchar *buf, size_t n)
 {
 	uint sum = 0;
@@ -371,7 +417,6 @@ checksum(uchar *buf, size_t n)
 
 		ptr++;
 	}
-
 	if (i == 1) {
 		ushort a = 0;
 		*(uchar *)&a = *(uchar *)ptr;

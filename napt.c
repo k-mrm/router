@@ -177,11 +177,12 @@ naptgsearch(NAPT_TABLE *ntab, uchar proto, IP gip, ushort gport)
 }
 
 static NAPT_ENT *
-allocgport(NAPT_TABLE *ntab, uchar proto)
+allocgport(NAPT_TABLE *ntab, uchar proto, ushort port)
 {
 	NAPT_ENT *entry;
 	NAPT_ENT *table;
 	size_t nentry;
+	ushort off;
 	int min;
 
 	table = getentries(ntab, proto, &nentry, &min);
@@ -189,6 +190,18 @@ allocgport(NAPT_TABLE *ntab, uchar proto)
 		return NULL;
 	}
 
+	if (port < min || min + nentry <= port) {
+		goto reallocate;
+	}
+
+	off = port - min;
+	entry = table + off;
+	if (entry->gport == 0) {
+		entry->gport = port;
+		return entry;
+	}
+
+reallocate:
 	for (size_t i = 0; i < nentry; i++) {
 		entry = table + i;
 		if (entry->gport == 0) {
@@ -216,6 +229,7 @@ rebuildip(SKBUF *buf, NAPT_ENT *ent, NAT_DIRECTION dir)
 
 	iphdr->check = 0;
 	iphdr->check = ipchecksum(buf);
+	printf("REBUILD IP: CHECKSUM=%x\n", iphdr->check);
 
 	return 0;
 }
@@ -224,18 +238,29 @@ static int
 rebuildtcp(SKBUF *buf, NAPT_ENT *ent, NAT_DIRECTION dir)
 {
 	TCP_HDR *tcp = buf->data;
+	IP src, dst;
+	IP_PSEUDO ph;
 
 	if (dir == INCOMING) {
 		// Global -> Local
 		tcp->dstport = htons(ent->lport);
+		dst = ent->lip;
+		src = ntohl(buf->iphdr->saddr);
 	}
 	else {	// OUTGOING
 		// Local -> Global
-		tcp->srcport = htons(ent->gport);
+		dst = ntohl(buf->iphdr->daddr);
+		src = ent->gip;
 	}
 
+	ph.srcip = htonl(src);
+	ph.dstip = htonl(dst);
+	ph.reserved = 0;
+	ph.proto = IPPROTO_TCP;
+	ph.len = htons(buf->size);
+
 	tcp->checksum = 0;
-	tcp->checksum = checksum((uchar *)tcp, buf->size);
+	tcp->checksum = checksum2((uchar *)&ph, sizeof ph, (uchar *)tcp, buf->size);
 
 	return rebuildip(buf, ent, dir);
 }
@@ -244,18 +269,32 @@ static int
 rebuildudp(SKBUF *buf, NAPT_ENT *ent, NAT_DIRECTION dir)
 {
 	UDP_HDR *udp = buf->data;
+	IP src, dst;
+	IP_PSEUDO ph;
 
 	if (dir == INCOMING) {
 		// Global -> Local
 		udp->dstport = htons(ent->lport);
+		dst = ent->lip;
+		src = ntohl(buf->iphdr->saddr);
 	}
 	else {	// OUTGOING
 		// Local -> Global
 		udp->srcport = htons(ent->gport);
+		dst = ntohl(buf->iphdr->daddr);
+		src = ent->gip;
 	}
 
+	ph.srcip = htonl(src);
+	ph.dstip = htonl(dst);
+	ph.reserved = 0;
+	ph.proto = IPPROTO_UDP;
+	ph.len = htons(buf->size);
+
 	udp->checksum = 0;
-	udp->checksum = checksum((uchar *)udp, buf->size);
+	udp->checksum = checksum2((uchar *)&ph, sizeof ph, (uchar *)udp, buf->size);
+	if (dir == OUTGOING)
+		printf("OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO UDP CHECKSUM=%x\n", udp->checksum);
 
 	return rebuildip(buf, ent, dir);
 }
@@ -315,6 +354,9 @@ naptin(NAPT *napt, SKBUF *buf)
 		return -1;
 	}
 
+	if (proto == IPPROTO_TCP) {
+		printf("INM TCP!!!!!!!!  ");
+	}
 	printf("NAPT search : proto=%d gip=%x gport=%d ", proto, gip, gport);
 	ent = naptgsearch(&napt->table, proto, gip, gport);
 	if (!ent) {
@@ -350,16 +392,20 @@ naptout(NAPT *napt, SKBUF *buf)
 	ent = naptlsearch(&napt->table, proto, lip, lport);
 
 	if (!ent) {
-		ent = allocgport(&napt->table, proto);
+		ent = allocgport(&napt->table, proto, lport);
 		if (!ent) {
 			return -1;
 		}
-		printf("NAPT new : lip=%x gip=%x lport=%d gport=%d\n", lip, gip, lport, ent->gport);
 
 		ent->lip = lip;
 		ent->gip = gip;
 		ent->lport = lport;
 	}
+
+	if (proto == IPPROTO_TCP) {
+		printf("OUT: TCP!!!!!!!!  ");
+	}
+	printf("NAPT local : lip=%x gip=%x lport=%d gport=%d\n", lip, gip, lport, ent->gport);
 
 	// rebuild packet
 	return rebuild(buf, proto, ent, OUTGOING);
