@@ -22,8 +22,8 @@ struct ROUTE {
 	};
 };
 
-int rtaddconnected(IP subnet, IP mask, NETDEV *con);
-int rtaddnexthop(IP subnet, IP mask, IP nexthop);
+int routeconnected(IP subnet, IP mask, NETDEV *con);
+int routenexthop(IP subnet, IP mask, IP nexthop);
 ROUTE *rtsearch(IP ipaddr);
 
 #endif	// __ROUTER_ROUTE_H

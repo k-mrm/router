@@ -1,0 +1,368 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/if_ether.h>
+
+#include "types.h"
+#include "net.h"
+#include "icmp.h"
+#include "napt.h"
+
+// port??
+void
+confignat(IP inip, IP inmask, IP out)
+{
+	IP insub = inip & inmask;
+	NETDEV *in;
+	char dbg[16];
+
+	in = devbysubnet(insub);
+
+	if (!in) {
+		bug("?");
+		return;
+	}
+
+	printf("NAT: %s out %s\n", in->name, ipv4addrfmt(out, dbg));
+
+	if (!in->napt) {
+		in->napt = malloc(sizeof *in->napt);
+		if (!in->napt) {
+			return;
+		}
+		memset (in->napt, 0, sizeof *in->napt);
+		in->napt->out = out;
+	}
+}
+
+static int
+srcport(SKBUF *buf, uchar proto, ushort *lport)
+{
+	void *packet = buf->data;
+
+	if (!lport) {
+		return -1;
+	}
+
+	switch (proto) {
+	case IPPROTO_TCP: {
+		TCP_HDR *tcp = packet;
+
+		*lport = ntohs(tcp->srcport);
+
+		return 0;
+	}
+	case IPPROTO_UDP: {
+		UDP_HDR *udp = packet;
+
+		*lport = ntohs(udp->srcport);
+
+		return 0;
+	}
+	case IPPROTO_ICMP: {
+		ICMP_ECHO *icmp = packet;
+
+		if (icmp->type != ICMP_TYPE_ECHO_REQUEST &&
+		    icmp->type != ICMP_TYPE_ECHO_RESPONSE) {
+			// Not supported
+			return -1;
+		}
+
+		*lport = ntohs(icmp->ident);
+
+		return 0;
+	}
+	default:
+		return -1;
+	}
+}
+
+static NAPT_ENT *
+getentries(NAPT_TABLE *ntab, uchar proto, size_t *pnentry, int *pportmin)
+{
+	NAPT_ENT *table;
+	size_t nentry;
+	int min;
+
+	switch (proto) {
+	case IPPROTO_UDP:
+		table = ntab->udp;
+		nentry = 40000;
+		min = 20000;
+		break;
+	case IPPROTO_TCP:
+		table = ntab->tcp;
+		nentry = 40000;
+		min = 20000;
+		break;
+	case IPPROTO_ICMP:
+		table = ntab->icmp;
+		nentry = 0x10000;
+		min = 0;
+		break;
+	default:
+		bug("unreachable");
+		return NULL;
+	}
+
+	if (pnentry) {
+		*pnentry = nentry;
+	}
+	if (pportmin) {
+		*pportmin = min;
+	}
+
+	return table;
+}
+
+static NAPT_ENT *
+naptlsearch(NAPT_TABLE *ntab, uchar proto, IP lip, ushort lport)
+{
+	NAPT_ENT *table;
+	NAPT_ENT *ent;
+	size_t nentry;
+
+	table = getentries(ntab, proto, &nentry, NULL);
+	if (!table) {
+		return NULL;
+	}
+
+	for (size_t i = 0; i < nentry; i++) {
+		ent = table + i;
+		if (ent->lip == lip && ent->lport == lport) {
+			return ent;
+		}
+	}
+
+	return NULL;
+}
+
+static NAPT_ENT *
+naptgsearch(NAPT_TABLE *ntab, uchar proto, IP gip, ushort gport)
+{
+	NAPT_ENT *entry;
+	NAPT_ENT *table;
+	int min;
+	ushort offset;
+
+	table = getentries(ntab, proto, NULL, &min);
+	if (!table) {
+		return NULL;
+	}
+
+	offset = gport - min;
+	entry = table + offset;
+
+	if (entry->gip == gip && entry->gport == gport) {
+		return entry;
+	}
+	else {
+		return NULL;
+	}
+}
+
+static NAPT_ENT *
+allocgport(NAPT_TABLE *ntab, uchar proto)
+{
+	NAPT_ENT *entry;
+	NAPT_ENT *table;
+	size_t nentry;
+	int min;
+
+	table = getentries(ntab, proto, &nentry, &min);
+	if (!table) {
+		return NULL;
+	}
+
+	for (size_t i = 0; i < nentry; i++) {
+		entry = table + i;
+		if (entry->gport == 0) {
+			entry->gport = i + min;
+			return entry;
+		}
+	}
+
+	return NULL;
+}
+
+static int
+rebuildip(SKBUF *buf, NAPT_ENT *ent, NAT_DIRECTION dir)
+{
+	struct iphdr *iphdr = buf->iphdr;
+
+	if (dir == INCOMING) {
+		// Global -> Local
+		iphdr->daddr = htonl(ent->lip);
+	}
+	else {	// OUTGOING
+		// Local -> Global
+		iphdr->saddr = htonl(ent->gip);
+	}
+
+	iphdr->check = 0;
+	iphdr->check = ipchecksum(buf);
+
+	return 0;
+}
+
+static int
+rebuildtcp(SKBUF *buf, NAPT_ENT *ent, NAT_DIRECTION dir)
+{
+	TCP_HDR *tcp = buf->data;
+
+	if (dir == INCOMING) {
+		// Global -> Local
+		tcp->dstport = htons(ent->lport);
+	}
+	else {	// OUTGOING
+		// Local -> Global
+		tcp->srcport = htons(ent->gport);
+	}
+
+	tcp->checksum = 0;
+	tcp->checksum = checksum((uchar *)tcp, buf->size);
+
+	return rebuildip(buf, ent, dir);
+}
+
+static int
+rebuildudp(SKBUF *buf, NAPT_ENT *ent, NAT_DIRECTION dir)
+{
+	UDP_HDR *udp = buf->data;
+
+	if (dir == INCOMING) {
+		// Global -> Local
+		udp->dstport = htons(ent->lport);
+	}
+	else {	// OUTGOING
+		// Local -> Global
+		udp->srcport = htons(ent->gport);
+	}
+
+	udp->checksum = 0;
+	udp->checksum = checksum((uchar *)udp, buf->size);
+
+	return rebuildip(buf, ent, dir);
+}
+
+static int
+rebuildicmp(SKBUF *buf, NAPT_ENT *ent, NAT_DIRECTION dir)
+{
+	ICMP_ECHO *icmp = buf->data;
+
+	if (dir == INCOMING) {
+		// Global -> Local
+		icmp->ident = htons(ent->lport);
+	}
+	else {	// OUTGOING
+		// Local -> Global
+		icmp->ident = htons(ent->gport);
+	}
+	
+	icmp->checksum = 0;
+	icmp->checksum = checksum((uchar *)icmp, buf->size);
+
+	return rebuildip(buf, ent, dir);
+}
+
+static int
+rebuild(SKBUF *buf, uchar proto, NAPT_ENT *ent, NAT_DIRECTION dir)
+{
+	switch (proto) {
+	case IPPROTO_TCP:
+		return rebuildtcp(buf, ent, dir);
+	case IPPROTO_UDP:
+		return rebuildudp(buf, ent, dir);
+	case IPPROTO_ICMP:
+		return rebuildicmp(buf, ent, dir);
+	default:
+		bug("unreachable");
+		return -1;
+	}
+}
+
+static int
+naptin(NAPT *napt, SKBUF *buf)
+{
+	struct iphdr *iphdr;
+	uchar proto;
+	ushort gport;
+	int rc;
+	NAPT_ENT *ent;
+	IP gip;
+
+	iphdr = buf->iphdr;
+	proto = iphdr->protocol;
+	gip = ntohl(iphdr->daddr);
+
+	rc = srcport(buf, proto, &gport);
+	if (rc < 0) {
+		return -1;
+	}
+
+	ent = naptgsearch(&napt->table, proto, gip, gport);
+	if (!ent) {
+		return -1;
+	}
+
+	// rewrite packet
+	return rebuild(buf, proto, ent, INCOMING);
+}
+
+static int
+naptout(NAPT *napt, SKBUF *buf)
+{
+	struct iphdr *iphdr;
+	uchar proto;
+	NAPT_ENT *ent;
+	IP lip, gip;
+	ushort lport;
+	int rc;
+
+	iphdr = buf->iphdr;
+	proto = iphdr->protocol;
+	lip = ntohl(iphdr->saddr);
+	gip = napt->out;
+
+	rc = srcport(buf, proto, &lport);
+	if (rc < 0) {
+		return -1;
+	}
+
+	ent = naptlsearch(&napt->table, proto, lip, lport);
+
+	if (!ent) {
+		ent = allocgport(&napt->table, proto);
+		if (!ent) {
+			return -1;
+		}
+
+		ent->lip = lip;
+		ent->gip = gip;
+		ent->lport = lport;
+	}
+
+	// rebuild packet
+	return rebuild(buf, proto, ent, OUTGOING);
+}
+
+int
+napt(NAPT *napt, NAT_DIRECTION d, SKBUF *buf)
+{
+	if (!napt) {
+		return -1;
+	}
+
+	if (d == INCOMING) {
+		return naptin(napt, buf);
+	}
+	else if (d == OUTGOING) {
+		return naptout(napt, buf);
+	}
+	else {
+		bug("unreachable");
+		return -1;
+	}
+}

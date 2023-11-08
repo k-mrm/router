@@ -4,7 +4,7 @@ LD = ld
 CFLAGS += -Wall -Wextra -I ./ -Og -g
 
 TARGET = router
-OBJS = arp.o ether.o icmp.o ipv4.o main.o net.o route.o
+OBJS = arp.o ether.o icmp.o ipv4.o main.o napt.o net.o route.o
 
 .PHONY: router clean
 

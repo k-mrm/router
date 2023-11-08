@@ -14,18 +14,15 @@
 #include "route.h"
 #include "arp.h"
 #include "icmp.h"
+#include "napt.h"
 
 static void
 handlemypkt(NETDEV *dev, IP src, SKBUF *buf)
 {
-	struct iphdr *iphdr = buf->iphdr;
 	uchar proto;
 
-	if (!iphdr) {
-		return;
-	}
-
-	proto = iphdr->protocol;
+	// L4
+	proto = buf->ipproto;
 
 	switch (proto) {
 	case IPPROTO_ICMP:
@@ -37,9 +34,24 @@ handlemypkt(NETDEV *dev, IP src, SKBUF *buf)
 }
 
 static int
-mypacket(SKBUF *buf, IP dst, IP src)
+mypacket(SKBUF *buf, IP dst, IP src, bool *napted)
 {
 	NETDEV *dev;
+	int rc;
+
+	*napted = false;
+
+	// NAPT ?
+	for (int i = 0; i < ndev; i++) {
+		dev = netdev[i];
+		if (dev->napt && dev->napt->out == dst) {
+			rc = napt(dev->napt, INCOMING, buf);
+			if (rc == 0) {
+				*napted = true;
+				return 0;
+			}
+		}
+	}
 
 	for (int i = 0; i < ndev; i++) {
 		dev = netdev[i];
@@ -133,13 +145,10 @@ recvipv4(NETDEV *dev, SKBUF *buf)
 	IP src, dst;
 	int rc;
 	char dbg[16];
+	bool napted;
 
 	iphdr = skpullip(buf);
 	if (!iphdr) {
-		return -1;
-	}
-
-	if (iphdr->version != 4) {
 		return -1;
 	}
 
@@ -147,14 +156,18 @@ recvipv4(NETDEV *dev, SKBUF *buf)
 	dst = ntohl(iphdr->daddr);
 
 	// check checksum
-	sum = checksum((uchar *)iphdr, buf->iphdrsz);
+	sum = ipchecksum(buf);
 	if (sum != 0 && sum != 0xffff) {
+		printf("invalid checksum=%x\n", iphdr->check);
 		return -1;
 	}
 
-	rc = mypacket(buf, dst, src);
+	rc = mypacket(buf, dst, src, &napted);
 	if (rc) {
 		return 0;
+	}
+	if (napted) {
+		goto sendip;
 	}
 
 	iphdr->ttl--;
@@ -164,10 +177,13 @@ recvipv4(NETDEV *dev, SKBUF *buf)
 		return -1;
 	}
 
-	// recalculate checksum
-	iphdr->check = 0;
-	iphdr->check = checksum((uchar *)iphdr, buf->iphdrsz);
+	rc = napt(dev->napt, OUTGOING, buf);
+	if (rc < 0) {
+		// Drop
+		return -1;
+	}
 
+sendip:
 	skpush(buf, buf->iphdrsz);
 	skref(buf);
 

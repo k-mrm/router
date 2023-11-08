@@ -48,13 +48,13 @@ insubnet(IP addr, IP subnet, IP mask)
 }
 
 int
-rtaddconnected(IP subnet, IP mask, NETDEV *con)
+routeconnected(IP subnet, IP mask, NETDEV *con)
 {
 	return rtadd(subnet, mask, CONNECTED, 0, con);
 }
 
 int
-rtaddnexthop(IP subnet, IP mask, IP nexthop)
+routenexthop(IP subnet, IP mask, IP nexthop)
 {
 	return rtadd(subnet, mask, NEXTHOP, nexthop, NULL);
 }

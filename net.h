@@ -9,8 +9,11 @@
 #include <linux/if_packet.h>
 #include "types.h"
 
-typedef struct NETDEV NETDEV;
-typedef struct SKBUF SKBUF;
+struct NAPT;
+
+typedef struct NAPT	NAPT;
+typedef struct NETDEV	NETDEV;
+typedef struct SKBUF	SKBUF;
 
 extern bool term;
 
@@ -26,6 +29,8 @@ struct NETDEV {
 	struct {
 		// ?
 	} ipv6;
+
+	NAPT *napt;
 };
 
 extern NETDEV *netdev[16];
@@ -36,6 +41,9 @@ void sigtrap(void);
 
 NETDEV *opennetdev(const char *name, bool promisc);
 void pnetdev(NETDEV *dev);
+
+NETDEV *devbysubnet(IP subnet);
+NETDEV *devbyipaddr(IP addr);
 
 char *ipv4addrfmt(IP ipaddr, char *str);
 char *hwaddrfmt(uchar *mac, char *str);
@@ -48,14 +56,17 @@ struct SKBUF {
 	size_t size;
 	uint ref;	// refcount
 
-	// header tracking
+	// Ether header tracking
 	struct ether_header *eth;
+	// IP header tracking
 	struct iphdr *iphdr;
 	ushort iphdrsz;
+	uchar ipproto;
 };
 
 SKBUF *skalloc(size_t size);
 void skfree(SKBUF *buf);
+ushort ipchecksum(SKBUF *buf);
 
 void skref(SKBUF *buf);
 

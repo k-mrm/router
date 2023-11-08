@@ -17,28 +17,30 @@
 #include "route.h"
 #include "ipv4.h"
 #include "ether.h"
+#include "napt.h"
 
 NETDEV *netdev[16];
 int ndev = 0;
 bool term = false;
 
-static IP nexthop = IPADDRESS(192, 168, 0, 1);
+static IP nexthop = IPADDRESS(192,168,0,1);
 
 static void
 netdevconfig()
 {
 	NETDEV *dev;
-	char ip[32];
 
 	for (int i = 0; i < ndev; i++) {
 		dev = netdev[i];
-		rtaddconnected(dev->ipv4.subnet, dev->ipv4.netmask, dev);
+		routeconnected(dev->ipv4.subnet, dev->ipv4.netmask, dev);
 	}
 
-	// default
-	rtaddnexthop(IPADDRESS(0,0,0,0), IPADDRESS(0,0,0,0), nexthop);
-	ipv4addrfmt(nexthop, ip);
-	printf("nexthop: %s\n", ip);
+	// default gw
+	routenexthop(IPADDRESS(0,0,0,0), IPADDRESS(0,0,0,0), nexthop);
+
+	// Add NAT: 192.168.1.0/24 -> 192.168.0.24
+	confignat(IPADDRESS(192,168,1,0), IPADDRESS(255,255,255,0),
+	          IPADDRESS(192,168,0,24));
 }
 
 static int

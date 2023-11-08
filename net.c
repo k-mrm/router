@@ -77,6 +77,36 @@ pnetdev(NETDEV *dev)
 }
 
 NETDEV *
+devbysubnet(IP subnet)
+{
+	NETDEV *dev;
+
+	for (int i = 0; i < ndev; i++) {
+		dev = netdev[i];
+		if (dev->ipv4.subnet == subnet) {
+			return dev;
+		}
+	}
+
+	return NULL;
+}
+
+NETDEV *
+devbyipaddr(IP addr)
+{
+	NETDEV *dev;
+
+	for (int i = 0; i < ndev; i++) {
+		dev = netdev[i];
+		if (dev->ipv4.addr == addr) {
+			return dev;
+		}
+	}
+
+	return NULL;
+}
+
+NETDEV *
 opennetdev(const char *name, bool promisc)
 {
 	struct ifreq ifr = {0};
@@ -269,15 +299,32 @@ skpullip(SKBUF *buf)
 {
 	struct iphdr *ip;
 	ushort iphdrsz;
+	uchar proto;
 
 	ip = buf->data;
 
+	if (ip->version != 4) {
+		// not ipv4 packet
+		return NULL;
+	}
+
 	iphdrsz = ip->ihl << 2;
+	proto = ip->protocol;
 
 	buf->iphdr = skpull(buf, iphdrsz);
 	buf->iphdrsz = iphdrsz;
+	buf->ipproto = proto;
 
 	return buf->iphdr;
+}
+
+ushort
+ipchecksum(SKBUF *buf)
+{
+	uchar *hdr = (uchar *)buf->iphdr;
+	ushort hdrsz = buf->iphdrsz;
+
+	return checksum(hdr, hdrsz);
 }
 
 void
