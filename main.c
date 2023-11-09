@@ -61,7 +61,7 @@ disableipforward()
 static int
 routercore(struct pollfd *fd)
 {
-	int nready;
+	int nready, rc;
 	NETDEV *dev;
 
 	nready = poll(fd, ndev, -1);
@@ -72,7 +72,12 @@ routercore(struct pollfd *fd)
 	for (int i = 0; i < ndev && nready; i++) {
 		if (fd[i].revents & (POLLIN | POLLERR)) {
 			dev = netdev[i];
-			recvether(dev);
+			rc = recvether(dev);
+			if (rc < 0) {
+				printf("PACKET DROPPED\n");
+			} else {
+				printf("PACKET :) :) :)\n");
+			}
 			nready--;
 		}
 	}

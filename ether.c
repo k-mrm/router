@@ -21,12 +21,12 @@ recvether(NETDEV *dev)
 {
 	struct ether_header *eth;
 	ushort type;
-	uchar b[4096];
+	uchar b[6000];
 	ssize_t nbytes;
 	SKBUF *buf;
 	int rc = -1;
 
-	nbytes = recvpacket(dev, b, 4096);
+	nbytes = recvpacket(dev, b, 6000);
 	if (nbytes < 0) {
 		return -1;
 	}

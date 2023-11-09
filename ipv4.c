@@ -46,9 +46,9 @@ mypacket(SKBUF *buf, IP dst, IP src, bool *napted)
 	for (int i = 0; i < ndev; i++) {
 		dev = netdev[i];
 		if (dev->napt && dev->napt->out == dst) {
+			printf("IN NAPT!1 %s: dst=%s src=%s\n", dev->name, ipv4addrfmt(dst, dbg), ipv4addrfmt(src, dbg2));
 			rc = napt(dev->napt, INCOMING, buf);
 			if (rc == 0) {
-				printf("IN NAPT! %s: dst=%s src=%s\n", dev->name, ipv4addrfmt(dst, dbg), ipv4addrfmt(src, dbg2));
 				*napted = true;
 				return 0;
 			}
@@ -86,10 +86,6 @@ routeipv4(SKBUF *buf)
 
 	dst = ntohl(iphdr->daddr);
 	csum = iphdr->check;
-
-	if (!csum) {
-		bug("oi");
-	}
 
 	rt = rtsearch(dst);
 
@@ -162,11 +158,15 @@ recvipv4(NETDEV *dev, SKBUF *buf)
 
 	iphdr = skpullip(buf);
 	if (!iphdr) {
+		bug("");
 		return -1;
 	}
 
 	src = ntohl(iphdr->saddr);
 	dst = ntohl(iphdr->daddr);
+
+	printf("%s RECV IP!: %s --> ", dev->name, ipv4addrfmt(src, dbg));
+	printf("%s\n", ipv4addrfmt(dst, dbg));
 
 	// check checksum
 	sum = ipchecksum(buf);
@@ -193,6 +193,7 @@ recvipv4(NETDEV *dev, SKBUF *buf)
 	rc = napt(dev->napt, OUTGOING, buf);
 	if (rc < 0) {
 		// Drop
+		printf("NAPT FAILED ToT\n");
 		return -1;
 	}
 

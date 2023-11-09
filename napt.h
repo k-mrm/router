@@ -1,6 +1,8 @@
 #ifndef __ROUTER_NAPT_H
 #define __ROUTER_NAPT_H
 
+#include <bits/endian.h>
+
 #include "types.h"
 #include "net.h"
 
@@ -41,7 +43,15 @@ struct TCP_HDR {
 	ushort dstport;
 	uint seq;
 	uint ack;
-	uchar offset;
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	uchar res:4;
+	uchar off:4;
+#elif __BYTE_ORDER == __BIG_ENDIAN
+	uchar off:4;
+	uchar res:4;
+#else
+#error	"endian?"
+#endif
 	uchar flag;
 	ushort windowsize;
 	ushort checksum;
@@ -51,7 +61,7 @@ struct TCP_HDR {
 struct UDP_HDR {
 	ushort srcport;
 	ushort dstport;
-	ushort packetlen;
+	ushort len;
 	ushort checksum;
 };
 

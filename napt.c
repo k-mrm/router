@@ -229,7 +229,6 @@ rebuildip(SKBUF *buf, NAPT_ENT *ent, NAT_DIRECTION dir)
 
 	iphdr->check = 0;
 	iphdr->check = ipchecksum(buf);
-	printf("REBUILD IP: CHECKSUM=%x\n", iphdr->check);
 
 	return 0;
 }
@@ -239,7 +238,8 @@ rebuildtcp(SKBUF *buf, NAPT_ENT *ent, NAT_DIRECTION dir)
 {
 	TCP_HDR *tcp = buf->data;
 	IP src, dst;
-	IP_PSEUDO ph;
+	IP_PSEUDO ph = {0};
+	ushort tcplen = ntohs(buf->iphdr->tot_len) - buf->iphdrsz;
 
 	if (dir == INCOMING) {
 		// Global -> Local
@@ -249,6 +249,7 @@ rebuildtcp(SKBUF *buf, NAPT_ENT *ent, NAT_DIRECTION dir)
 	}
 	else {	// OUTGOING
 		// Local -> Global
+		tcp->srcport = htons(ent->gport);
 		dst = ntohl(buf->iphdr->daddr);
 		src = ent->gip;
 	}
@@ -257,10 +258,16 @@ rebuildtcp(SKBUF *buf, NAPT_ENT *ent, NAT_DIRECTION dir)
 	ph.dstip = htonl(dst);
 	ph.reserved = 0;
 	ph.proto = IPPROTO_TCP;
-	ph.len = htons(buf->size);
+	ph.len = htons(tcplen);
 
 	tcp->checksum = 0;
 	tcp->checksum = checksum2((uchar *)&ph, sizeof ph, (uchar *)tcp, buf->size);
+	/*
+	if (dir == INCOMING) {
+		printf(".......................................................................................... TCP CHECKSUM=%x(%x) sport=%d dport=%d sz=%u tcplen=%d\n",
+			tcp->checksum, csum, ntohs(tcp->srcport), ntohs(tcp->dstport), buf->size, tcplen);
+	}
+	*/
 
 	return rebuildip(buf, ent, dir);
 }
@@ -293,8 +300,6 @@ rebuildudp(SKBUF *buf, NAPT_ENT *ent, NAT_DIRECTION dir)
 
 	udp->checksum = 0;
 	udp->checksum = checksum2((uchar *)&ph, sizeof ph, (uchar *)udp, buf->size);
-	if (dir == OUTGOING)
-		printf("OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO UDP CHECKSUM=%x\n", udp->checksum);
 
 	return rebuildip(buf, ent, dir);
 }
